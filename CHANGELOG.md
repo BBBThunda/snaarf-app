@@ -7,16 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Pre push auto validation
 - Login with Twitch OAuth
 - Database integration
 - User Accounts
-- Channel-specific bot config
+- Channel-specific bot configz
 - Allow Mods to admin the bot
 - Invite the bot to channel
 - API for bot to load/save feature data
 - CONTRIBUITING.md document
 - Docs (mkdocs?)
 - Frontend framework (React/Sass?)
+- Docker/Podman dev container?
 
 ## [0.0.1] - 2023-09-20
 

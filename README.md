@@ -35,3 +35,9 @@ This must also pass before you push code changes
 ```bash
 flake8
 ```
+
+#### Freeze Requirements
+Please freeze requirements after adding/removing/updating packages 
+```bash
+pip freeze > requirements.txt
+```
