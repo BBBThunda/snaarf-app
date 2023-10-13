@@ -67,11 +67,6 @@ Now you can install the remaining python/pip dependencies.
 pip install -r requirements.txt 
 ```
 
-Don't forget to tell git to use the `.githooks` subdirectory for this repo. This will make sure you don't forget to run validation/tests when you make changes.
-```bash
-git config core.hooksPath .githooks
-```
-
 #### Code Linting and Formatting
 All changes involving .py files must pass these checks. The pre-commit hook will run these for you, but if you want to run them manually, use the following commands:
 Note: You can replace `/snaarf_app /tests` with your changed files or you can just run these as-is and ignore any errors that aren't related to your changes.
