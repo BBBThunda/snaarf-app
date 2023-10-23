@@ -13,5 +13,5 @@ def index():
     return render_template("index.html", title="SnaarfBot")
 
 
-if __name__ != "__main__":
+if __name__ == "__main__":
     app.run(host=os.getenv("DEV_HOST"), port=os.getenv("DEV_PORT"))
