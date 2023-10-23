@@ -6,5 +6,3 @@ load_dotenv()
 
 if __name__ == "__main__":
     app.run(host=os.getenv("PROD_HOST"), port=os.getenv("PROD_PORT"))
-else:
-    app.run(host=os.getenv("DEV_HOST"), port=os.getenv("DEV_PORT"))

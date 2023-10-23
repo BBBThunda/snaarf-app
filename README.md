@@ -25,6 +25,10 @@ DB_PASS=passwordForDbUser
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=snaarf_app
+PROD_HOST=0.0.0.0
+PROD_PORT=8000
+DEV_HOST=localhost
+DEV_PORT=8000
 ```
 
 
@@ -42,7 +46,7 @@ Note: all commands should be run from the project root
 Install platform dependencies - the `apt-get` commands are meant to be run on Ubuntu 22.04.
 ```bash
 sudo apt-get -y update && sudo apt-get -y upgrade
-sudo apt-get install python3.10 python3.10-venv python3.10-pip python3-setuptools
+sudo apt-get install python3.10 python3.10-venv python3-pip python3-setuptools
 ```
 
 Create/activate a virtual environment for the repository.
@@ -71,20 +75,20 @@ pip install -r requirements.txt
 All changes involving .py files must pass these checks. The pre-commit hook will run these for you, but if you want to run them manually, use the following commands:
 Note: You can replace `/snaarf_app /tests` with your changed files or you can just run these as-is and ignore any errors that aren't related to your changes.
 ```bash
-flake8 /snaarf_app /tests
-black /snaarf_app /tests
+flake8 snaarf_app/ tests/
+black snaarf_app/ tests/
 ```
 
 Note: `black` will automatically fix errors and modify your files. If you want to run it without modifying any files, use the `--check` switch.
 ```bash
-black --check /snaarf_app /tests
+black --check snaarf_app/ tests/
 ```
 
 
 #### Run tests
 Tests must also pass before you push code changes. A code coverage target will be enforced eventually. For now you can manually open up /tmp/coverage.html in a browser to see the code coverage report.
 ```bash
-pytest tests
+pytest tests/
 ```
 
 
