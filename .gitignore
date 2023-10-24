@@ -1,4 +1,6 @@
-/tmp
+/tmp/*
+!/tmp/.gitignore
+*.swp # Ignore temporary Vim cache files
 # Add custom ignores above this line ###########################
 
 # Created by https://www.toptal.com/developers/gitignore/api/flask

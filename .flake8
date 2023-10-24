@@ -1,2 +1,3 @@
 [flake8]
 exclude = .git,__pycache__,.pytest_cache,.venv
+output-file = tmp/flake8.log
