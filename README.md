@@ -13,7 +13,7 @@ This is the source code for the SnaarfBot.com website and the SnaarfBot internal
 
 #### Database
 
-For the PostreSQL server we recommend you create a database `snaarf_app` owned by user `snaarf_app` that matches the credentials mentioned below in the `.env` File section.
+For the PostreSQL server we recommend you create a database `snaarf_app` owned by user `snaarf_app` that matches the credentials mentioned below in the `.env` File section. Make sure user `snaarf_app` has a secure password.
 
 #### `.env` File
 
@@ -25,8 +25,6 @@ DB_PASS=passwordForDbUser
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=snaarf_app
-PROD_HOST=0.0.0.0
-PROD_PORT=8000
 DEV_HOST=localhost
 DEV_PORT=8000
 ```
