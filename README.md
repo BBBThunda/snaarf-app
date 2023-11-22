@@ -74,12 +74,12 @@ All changes involving .py files must pass these checks. The pre-commit hook will
 Note: You can replace `/snaarf_app /tests` with your changed files or you can just run these as-is and ignore any errors that aren't related to your changes.
 ```bash
 flake8 snaarf_app/ tests/
-black snaarf_app/ tests/
+black -l 79 snaarf_app/ tests/
 ```
 
 Note: `black` will automatically fix errors and modify your files. If you want to run it without modifying any files, use the `--check` switch.
 ```bash
-black --check snaarf_app/ tests/
+black -l 79 --check snaarf_app/ tests/
 ```
 
 

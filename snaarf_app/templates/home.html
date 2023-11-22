@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ title }}</title>
+<link href="{{ url_for('static', filename='styles/normalize.css')}}" rel="stylesheet" />
+<link href="{{ url_for('static', filename='styles/style.css')}}" rel="stylesheet" />
+</head>
+<body>
+
+
+<h1>SnaarfBot: Yet another Twitch Bot</h1>
+<h4>You are logged in</h4>
+<p>This is your dashboard. Enjoy!!!</p>
+
+{% if not debug_data %}
+<p>And here's some debug info:</p>
+<p>{{ debug_data }}</p>
+{% endif %}
+
+
+</body>
+</html>

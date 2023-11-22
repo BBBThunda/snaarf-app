@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,14 +12,8 @@
 
 
 <h1>SnaarfBot: Yet another Twitch Bot</h1>
-<h4>What is SnaarfBot?</h4>
-<p>SnaarfBot is a Twitch bot that can interact with your chat. This site is where you configure the SnaarfBot experience for your channel.</p>
-<a href={{ twitch_uri }}>Login with Twitch</a>
-
-{% if debug_data %}
-    <p>And here's some debug info:</p>
-    <p>{{ debug_data }}</p>
-{% endif %}
+<h4>Here's the response from Twitch Oauth</h4>
+<p>{{ debug_data }}</p>
 
 
 </body>
