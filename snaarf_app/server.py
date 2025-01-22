@@ -1,7 +1,11 @@
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from flask import Flask, make_response, render_template, request
+from flask_migrate import Migrate
+from flask_session import Session
+from flask_sqlalchemy import SQLAlchemy
 import os
+import redis
 import requests
 from urllib.parse import urlencode
 import uuid
@@ -10,6 +14,26 @@ load_dotenv()
 
 app = Flask(__name__)
 
+# Configure Sessions
+# Use Redis for storing the session data on the server-side
+session_cache = redis.Redis(host=os.getenv('REDIS_HOST'),
+                            por=os.getenv('REDIS_PORT'),
+                            password=os.getenv('REDIS_AUTH_PASSWORD'))
+# Used to cryptographically-sign session ID cookies
+app.secret_key = os.getenv('APP_SECRET_KEY')
+app.config['SESSION_TYPE'] = 'redis'
+app.config['SESSION_PERMANENT'] = False
+app.config['SESSION_USE_SIGNER'] = True
+app.config['SESSION_REDIS'] = session_cache
+# Create and initialize Flask-Session object AFTER `app` has been configured
+server_session = Session(app)
+
+# Configure SQLAlchemy
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DB_URI')
+db = SQLAlchemy(app)
+migrate = Migrate(app, db)
+
+# Constants for Twitch Oauth2
 BASE_TWITCH_AUTH_URI = 'https://id.twitch.tv/oauth2/authorize'
 BASE_TWITCH_TOKEN_URI = 'https://id.twitch.tv/oauth2/token'
 TWITCH_API_SCOPE = (
@@ -71,8 +95,6 @@ def index():
 
 @app.route('/twitch/auth_redirect')
 def auth_redirect():
-    # IS THERE A WAY TO ENSURE REDIRECT ACTUALLY CAME FROM TWITCH? (PROB NOT)
-
     # REQUEST SHOULD CONTAIN state AND AN auth_code
     if 'state' not in request.args or 'code' not in request.args:
         app.logger.error(
