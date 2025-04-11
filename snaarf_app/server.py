@@ -16,9 +16,13 @@ app = Flask(__name__)
 
 # Configure Sessions
 # Use Redis for storing the session data on the server-side
-session_cache = redis.Redis(host=os.getenv('REDIS_HOST'),
-                            por=os.getenv('REDIS_PORT'),
-                            password=os.getenv('REDIS_AUTH_PASSWORD'))
+session_cache = redis.Redis(
+    host=os.getenv('REDIS_HOST', 'localhost'),
+    port=int(os.getenv('REDIS_PORT', '6379')),
+    password=os.getenv('REDIS_AUTH_PASSWORD'),
+    db=0,
+    decode_responses=True  # Automatically decode responses to strings
+)
 # Used to cryptographically-sign session ID cookies
 app.secret_key = os.getenv('APP_SECRET_KEY')
 app.config['SESSION_TYPE'] = 'redis'
@@ -97,26 +101,31 @@ def index():
 def auth_redirect():
     # REQUEST SHOULD CONTAIN state AND AN auth_code
     if 'state' not in request.args or 'code' not in request.args:
+        error_message = 'Bad input received from Twitch auth_redirect.'
         app.logger.error(
-            'Bad input received from Twitch auth_redirect.'
+            error_message
             + ' Request args: %s',
             repr(request.args),
         )
-        # TODO: RETURN 404 PAGE
-        return ''
+
+        # RETURN 404 PAGE WITH ERROR MESSAGE
+        return render_template('404.html', error_message=error_message)
 
     # TODO: Handle use case where twitch sends error
+
 
     auth_code = request.args['code']
 
     # Make sure request state matches cookie state
     if request.args['state'] != request.cookies.get('state'):
+        error_message = 'Insecure auth_redirect request detected.'
         app.logger.error(
-            'Insecure auth_redirect request detected.' + ' Request args: %s',
+            error_message
+            + ' Request args: %s',
             repr(request.args),
         )
-        # TODO:  RETURN 404 PAGE
-        return ''
+        # RETURN 404 PAGE WITH ERROR MESSAGE
+        return render_template('404.html', error_message=error_message)
 
     # If Twitch changes the scope, log it, so we can investigate
     if request.args['scope'] != request.cookies.get('scope'):
@@ -173,20 +182,42 @@ def auth_redirect():
     access_token = response_data['access_token']
     expires_in = int(response_data['expires_in'])
     expires = datetime.now() + timedelta(seconds=expires_in)
-    # refresh_token = response_data['refresh_token']
+    refresh_token = response_data['refresh_token']
 
-    # Store tokens in DB with expire time
-    # LEFT OFF HERE!!!
+    # Get user info from Twitch
+    user_info_response = requests.get(
+        'https://api.twitch.tv/helix/users',
+        headers={
+            'Authorization': f'Bearer {access_token}',
+            'Client-Id': os.getenv('TWITCH_CLIENT_ID')
+        }
+    )
+    user_data = user_info_response.json()
+    
+    if 'data' not in user_data or not user_data['data']:
+        app.logger.error('Failed to get user info: %s', user_data)
+        return render_template('404.html', error_message='Failed to get user information from Twitch')
+
+    user_id = user_data['data'][0]['id']
+
+    # Store tokens in Redis with expiration
+    session_cache.hset(f'user:{user_id}', mapping={
+        'access_token': access_token,
+        'refresh_token': refresh_token,
+        'expires_at': expires.isoformat()
+    })
+    # Set expiration for the entire hash
+    session_cache.expire(f'user:{user_id}', expires_in)
 
     # Create response
     template = render_template(
         'auth_redirect.html',
         title='SnaarfBot',
-        debug_data=repr(request.args) + repr(response_data) + repr(expires),
+        debug_data=repr(request.args) + repr(response_data) + repr(expires) + repr(user_data),
     )
     response = make_response(template)
-    # Store token in cookie
-    response.set_cookie('access_token', access_token)
+    # Store user_id in session for quick access
+    session['user_id'] = user_id
     return response
 
 
