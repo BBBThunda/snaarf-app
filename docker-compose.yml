@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: container/snaarf-app.dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - REDIS_HOST=redis
+    volumes:
+      - .:/app
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - snaarf-network
+
+  postgres:
+    image: postgres:14
+    environment:
+      - POSTGRES_USER=snaarf_app
+      - POSTGRES_PASSWORD=${DB_PASS}
+      - POSTGRES_DB=snaarf_app
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - snaarf-network
+
+  redis:
+    image: redis:7
+    command: redis-server --requirepass ${REDIS_AUTH_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - snaarf-network
+
+networks:
+  snaarf-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data: 

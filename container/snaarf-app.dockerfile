@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Install system dependencies including Redis
 RUN apt-get update && \
-    apt-get install -y python3-pip python3-setuptools redis-server ufw net-tools && \
+    apt-get install -y net-tools python3-pip python3-setuptools redis-server ufw && \
     apt-get clean && \
     # Remove cache as recommended by SonarQube (docker:S6587)
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* && \
@@ -17,8 +17,8 @@ RUN apt-get update && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application
-COPY . .
+# Create logs directory
+RUN mkdir -p /app/logs && chmod 777 /app/logs
 
 # Configure Redis
 RUN echo "bind 0.0.0.0" >> /etc/redis/redis.conf && \
@@ -30,15 +30,18 @@ ENV FLASK_RUN_PORT=8000
 ENV FLASK_DEBUG=1
 ENV FLASK_ENV=development
 
-# Expose the port the API will run on
-EXPOSE 8000
+# Expose the ports the API and Redis will run on
+# Note: Only expose Redis port 6379 in development
+EXPOSE 8000 6379
 
 # Allow all traffic on port 8000
 RUN ufw allow 8000
 
 # Start both Redis and Flask with password configuration
 CMD ["sh", "-c", "\
+    trap 'service redis-server stop; exit 0' TERM INT && \
     echo \"requirepass \\\"$REDIS_AUTH_PASSWORD\\\"\" >> /etc/redis/redis.conf && \
     service redis-server start && \
     netstat -tulpn && \
-    flask run --host=0.0.0.0 --port=8000"]
+    flask run & \
+    wait"]

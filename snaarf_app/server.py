@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from flask import Flask, make_response, render_template, request
+from flask import Flask, make_response, render_template, request, session
 from flask_migrate import Migrate
 from flask_session import Session
 from flask_sqlalchemy import SQLAlchemy
@@ -9,6 +9,7 @@ import redis
 import requests
 from urllib.parse import urlencode
 import uuid
+from .redis_wrapper import RedisWrapper
 
 load_dotenv()
 
@@ -16,19 +17,18 @@ app = Flask(__name__)
 
 # Configure Sessions
 # Use Redis for storing the session data on the server-side
-session_cache = redis.Redis(
+session_cache = RedisWrapper(
     host=os.getenv('REDIS_HOST', 'localhost'),
     port=int(os.getenv('REDIS_PORT', '6379')),
     password=os.getenv('REDIS_AUTH_PASSWORD'),
-    db=0,
-    decode_responses=True  # Automatically decode responses to strings
+    db=0
 )
 # Used to cryptographically-sign session ID cookies
 app.secret_key = os.getenv('APP_SECRET_KEY')
 app.config['SESSION_TYPE'] = 'redis'
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
-app.config['SESSION_REDIS'] = session_cache
+app.config['SESSION_REDIS'] = session_cache._redis  # Use the underlying Redis instance for Flask-Session
 # Create and initialize Flask-Session object AFTER `app` has been configured
 server_session = Session(app)
 
@@ -45,25 +45,114 @@ TWITCH_API_SCOPE = (
 )
 TWITCH_TOKEN_TYPE = 'bearer'
 
+def refresh_token(user_id):
+    """Refresh the access token using the refresh token."""
+    try:
+        # Get current tokens from Redis
+        tokens = session_cache.hgetall(f'user:{user_id}')
+        if not tokens:
+            app.logger.error('No tokens found for user %s', user_id)
+            return False
 
-def refresh_token(token):
-    # CHECK WHETHER TOKEN IS VALID AND REFRESH IF NEEDED
-    return False
+        refresh_token = tokens['refresh_token']
+        
+        # Request new token from Twitch
+        post_data = {
+            'client_id': os.getenv('TWITCH_CLIENT_ID'),
+            'client_secret': os.getenv('TWITCH_SECRET'),
+            'grant_type': 'refresh_token',
+            'refresh_token': refresh_token
+        }
+        
+        response = requests.post(
+            BASE_TWITCH_TOKEN_URI,
+            data=post_data,
+            timeout=5
+        )
+        response.raise_for_status()
+        response_data = response.json()
 
+        # Validate response
+        if ('access_token' not in response_data or 
+            'expires_in' not in response_data or 
+            'refresh_token' not in response_data):
+            app.logger.error('Invalid token refresh response: %s', response_data)
+            return False
+
+        # Update tokens in Redis
+        expires_in = int(response_data['expires_in'])
+        expires = datetime.now() + timedelta(seconds=expires_in)
+        
+        session_cache.hset(f'user:{user_id}', {
+            'access_token': response_data['access_token'],
+            'refresh_token': response_data['refresh_token'],
+            'expires_at': expires.isoformat()
+        })
+        session_cache.expire(f'user:{user_id}', expires_in)
+        
+        return True
+    except (requests.exceptions.RequestException, redis.RedisError, UnicodeError) as e:
+        app.logger.error('Failed to refresh token: %s', str(e))
+        return False
+
+def get_user_id():
+    """Safely get the user_id from the session."""
+    session_id = session.get('session_id')
+    if not session_id:
+        return None
+    try:
+        return session_cache.get(f'session:{session_id}')
+    except (redis.RedisError, ValueError) as e:
+        app.logger.error('Error getting user_id from session: %s', str(e))
+        return None
+
+def set_user_id(user_id):
+    """Safely set the user_id in the session."""
+    try:
+        # Generate a new session ID
+        session_id = str(uuid.uuid4())
+        # Store session_id -> user_id mapping in Redis
+        session_cache.set(f'session:{session_id}', user_id)
+        # Store session_id in signed cookie
+        session['session_id'] = session_id
+        return True
+    except (redis.RedisError, UnicodeEncodeError) as e:
+        app.logger.error('Error setting user_id in session: %s', str(e))
+        return False
 
 def check_logged_in():
-    return False
+    """Check if user is logged in and has valid tokens."""
+    user_id = get_user_id()
+    if not user_id:
+        return False
 
+    try:
+        tokens = session_cache.hgetall(f'user:{user_id}')
+        if not tokens:
+            return False
+        
+        # Check if token is expired or about to expire (within 5 minutes)
+        expires_at = datetime.fromisoformat(tokens['expires_at'])
+        if datetime.now() + timedelta(minutes=5) >= expires_at:
+            # Try to refresh the token
+            if not refresh_token(user_id):
+                return False
+            
+        app.logger.debug('User %s is logged in', user_id)
+        return True
+    
+    except (redis.RedisError, ValueError, KeyError) as e:
+        app.logger.error('Error checking login status: %s', str(e))
+        return False
 
 @app.route('/')
 @app.route('/index')
 def index():
-    # Get state FROM COOKIE OR GENERATE A NEW ONE
+    # Get state from cookie or generate a new one
     if 'state' in request.cookies:
         state = request.cookies.get('state')
     else:
         state = str(uuid.uuid4())
-        # STORE NEW STATE IN DB (maybe not necessary)
 
     is_logged_in = check_logged_in()
 
@@ -94,6 +183,7 @@ def index():
 
     response = make_response(template)
     response.set_cookie('state', state)
+    response.set_cookie('scope', TWITCH_API_SCOPE)
     return response
 
 
@@ -162,7 +252,7 @@ def auth_redirect():
         )
         return ''
 
-    # Validate "valid" response
+    # Validate response
     if (
         'access_token' not in response_data
         or 'expires_in' not in response_data
@@ -185,40 +275,61 @@ def auth_redirect():
     refresh_token = response_data['refresh_token']
 
     # Get user info from Twitch
-    user_info_response = requests.get(
-        'https://api.twitch.tv/helix/users',
-        headers={
-            'Authorization': f'Bearer {access_token}',
-            'Client-Id': os.getenv('TWITCH_CLIENT_ID')
-        }
-    )
-    user_data = user_info_response.json()
+    try:
+        user_info_response = requests.get(
+            'https://api.twitch.tv/helix/users',
+            headers={
+                'Authorization': f'Bearer {access_token}',
+                'Client-Id': os.getenv('TWITCH_CLIENT_ID')
+            },
+            timeout=5  # Add timeout to prevent hanging
+        )
+        user_info_response.raise_for_status()  # Raise exception for bad status codes
+        user_data = user_info_response.json()
+    except requests.exceptions.RequestException as e:
+        app.logger.error('Failed to get user info from Twitch API: %s', str(e))
+        return render_template('404.html', error_message='Failed to connect to Twitch API')
+    except ValueError as e:
+        app.logger.error('Invalid JSON response from Twitch API: %s', str(e))
+        return render_template('404.html', error_message='Invalid response from Twitch API')
     
     if 'data' not in user_data or not user_data['data']:
-        app.logger.error('Failed to get user info: %s', user_data)
-        return render_template('404.html', error_message='Failed to get user information from Twitch')
+        app.logger.error('No user data in Twitch API response: %s', user_data)
+        return render_template('404.html', error_message='No user information found in Twitch response')
 
-    user_id = user_data['data'][0]['id']
+    try:
+        user_id = user_data['data'][0]['id']
+    except (KeyError, IndexError) as e:
+        app.logger.error('Invalid user data structure: %s', str(e))
+        return render_template('404.html', error_message='Invalid user data structure from Twitch')
 
     # Store tokens in Redis with expiration
-    session_cache.hset(f'user:{user_id}', mapping={
-        'access_token': access_token,
-        'refresh_token': refresh_token,
-        'expires_at': expires.isoformat()
-    })
-    # Set expiration for the entire hash
-    session_cache.expire(f'user:{user_id}', expires_in)
+    try:
+        session_cache.hset(f'user:{user_id}', {
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+            'expires_at': expires.isoformat()
+        })
+        session_cache.expire(f'user:{user_id}', expires_in)
+    except redis.RedisError as e:
+        app.logger.error('Failed to store tokens in Redis: %s', str(e))
+        return render_template('404.html', error_message='Failed to store authentication data')
 
     # Create response
-    template = render_template(
-        'auth_redirect.html',
-        title='SnaarfBot',
-        debug_data=repr(request.args) + repr(response_data) + repr(expires) + repr(user_data),
-    )
-    response = make_response(template)
-    # Store user_id in session for quick access
-    session['user_id'] = user_id
-    return response
+    try:
+        template = render_template(
+            'auth_redirect.html',
+            title='SnaarfBot',
+            debug_data=repr(request.args) + repr(response_data) + repr(expires) + repr(user_data),
+        )
+        response = make_response(template)
+        # Store user_id securely in session
+        if not set_user_id(user_id):
+            return render_template('404.html', error_message='Failed to create session')
+        return response
+    except Exception as e:
+        app.logger.error('Failed to create response: %s', str(e))
+        return render_template('404.html', error_message='Failed to create response')
 
 
 if __name__ == '__main__':
