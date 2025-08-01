@@ -166,13 +166,33 @@ black -l 79 --check snaarf_app/ tests/
 
 #### Run tests
 Tests must also pass before you push code changes. A code coverage target will be enforced eventually. For now you can manually open up /tmp/coverage.html in a browser to see the code coverage report.
+
+##### Using Docker (Recommended)
 ```bash
-pytest tests/
+# Run all tests
+docker-compose up test
+
+# Run specific test file
+docker-compose run test pytest tests/test_oauth.py
+
+# Run specific test function
+docker-compose run test pytest tests/test_oauth.py::test_auth_redirect_success
+
+# Run tests with output (for debugging)
+docker-compose run test pytest -s tests
 ```
 
-
-#### Run tests with output
-For when you need to stick a print() statement in your test files to troubleshoot.
+##### Manual Setup
 ```bash
+# Run all tests
+pytest tests/
+
+# Run specific test file
+pytest tests/test_oauth.py
+
+# Run specific test function
+pytest tests/test_oauth.py::test_auth_redirect_success
+
+# Run tests with output (for debugging)
 pytest -s tests
 ```

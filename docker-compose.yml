@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   app:
     build:
@@ -16,6 +14,30 @@ services:
     depends_on:
       - postgres
       - redis
+    networks:
+      - snaarf-network
+
+  test:
+    build:
+      context: .
+      dockerfile: container/snaarf-app.dockerfile
+    command: pytest tests/
+    environment:
+      - DB_URI=postgresql://snaarf_app:${DB_PASS}@postgres:5432/snaarf_app
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_AUTH_PASSWORD=${REDIS_AUTH_PASSWORD}
+      - APP_SECRET_KEY=${APP_SECRET_KEY}
+      - TWITCH_CLIENT_ID=${TWITCH_CLIENT_ID}
+      - TWITCH_SECRET=${TWITCH_SECRET}
+      - TWITCH_REDIRECT_URI=${TWITCH_REDIRECT_URI}
+    volumes:
+      - .:/app
+    depends_on:
+      - postgres
+      - redis
+    profiles:
+      - test
     networks:
       - snaarf-network
 

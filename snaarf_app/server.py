@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from flask import Flask, make_response, render_template, request, session
+from flask import Flask, make_response, render_template, request, session, redirect, url_for
 from flask_migrate import Migrate
 from flask_session import Session
 from flask_sqlalchemy import SQLAlchemy
@@ -95,9 +95,13 @@ def refresh_token(user_id):
         app.logger.error('Failed to refresh token: %s', str(e))
         return False
 
-def get_user_id():
-    """Safely get the user_id from the session."""
-    session_id = session.get('session_id')
+def get_user_id_controller():
+    """Controller function to get user ID from session."""
+    return get_user_id(session)
+
+def get_user_id(session_obj):
+    """Business logic to get user ID from session."""
+    session_id = session_obj.get('session_id')
     if not session_id:
         return None
     try:
@@ -106,23 +110,25 @@ def get_user_id():
         app.logger.error('Error getting user_id from session: %s', str(e))
         return None
 
-def set_user_id(user_id):
-    """Safely set the user_id in the session."""
+def set_user_id_controller(user_id):
+    """Controller function to set user ID in session."""
+    session_id = str(uuid.uuid4())
+    return set_user_id(session_id, user_id, session)
+
+def set_user_id(session_id, user_id, session_obj):
+    """Business logic to set user ID in session."""
     try:
-        # Generate a new session ID
-        session_id = str(uuid.uuid4())
         # Store session_id -> user_id mapping in Redis
         session_cache.set(f'session:{session_id}', user_id)
-        # Store session_id in signed cookie
-        session['session_id'] = session_id
+        # Store session_id in signed cookie - ensure it's a string
+        session_obj['session_id'] = str(session_id)
         return True
     except (redis.RedisError, UnicodeEncodeError) as e:
         app.logger.error('Error setting user_id in session: %s', str(e))
         return False
 
-def check_logged_in():
-    """Check if user is logged in and has valid tokens."""
-    user_id = get_user_id()
+def check_logged_in(user_id):
+    """Business logic to check if user is logged in and has valid tokens."""
     if not user_id:
         return False
 
@@ -154,7 +160,7 @@ def index():
     else:
         state = str(uuid.uuid4())
 
-    is_logged_in = check_logged_in()
+    is_logged_in = check_logged_in(get_user_id_controller())
 
     if is_logged_in:
         # If logged in, return home template
@@ -178,12 +184,11 @@ def index():
             'index.html',
             title='SnaarfBot',
             twitch_uri=twitch_auth_link_uri,
-            debug_data=str(state),
         )
 
     response = make_response(template)
-    response.set_cookie('state', state)
-    response.set_cookie('scope', TWITCH_API_SCOPE)
+    response.set_cookie('state', str(state))
+    response.set_cookie('scope', str(TWITCH_API_SCOPE))
     return response
 
 
@@ -219,7 +224,7 @@ def auth_redirect():
 
     # If Twitch changes the scope, log it, so we can investigate
     if request.args['scope'] != request.cookies.get('scope'):
-        app.logger.warn(
+        app.logger.warning(
             'Scope received from Twitch auth does not match '
             + 'requested scope. requested:|'
             + str(request.args['scope'])
@@ -247,8 +252,8 @@ def auth_redirect():
     # TODO: figure out how to do schema validation later
     if 'error' in response_data or 'error_description' in response_data:
         app.logger.error(
-            'Error requesting access token. response_data: '
-            + repr(response_data)
+            'Error requesting access token. Error: %s',
+            response_data.get('error_description', response_data.get('error', 'Unknown error'))
         )
         return ''
 
@@ -261,11 +266,9 @@ def auth_redirect():
         or response_data['token_type'] != TWITCH_TOKEN_TYPE
     ):
         app.logger.error(
-            'Bad response from token server. '
-            + 'post_data: '
-            + repr(post_data)
-            + 'response_data: '
-            + repr(response_data)
+            'Bad response from token server. Missing required fields. '
+            'Response keys: %s',
+            list(response_data.keys())
         )
         return ''
 
@@ -294,7 +297,7 @@ def auth_redirect():
         return render_template('404.html', error_message='Invalid response from Twitch API')
     
     if 'data' not in user_data or not user_data['data']:
-        app.logger.error('No user data in Twitch API response: %s', user_data)
+        app.logger.error('No user data in Twitch API response. Response keys: %s', list(user_data.keys()))
         return render_template('404.html', error_message='No user information found in Twitch response')
 
     try:
@@ -317,16 +320,12 @@ def auth_redirect():
 
     # Create response
     try:
-        template = render_template(
-            'auth_redirect.html',
-            title='SnaarfBot',
-            debug_data=repr(request.args) + repr(response_data) + repr(expires) + repr(user_data),
-        )
-        response = make_response(template)
         # Store user_id securely in session
-        if not set_user_id(user_id):
+        if not set_user_id_controller(user_id):
             return render_template('404.html', error_message='Failed to create session')
-        return response
+        
+        # Redirect to home page after successful OAuth
+        return redirect(url_for('index'))
     except Exception as e:
         app.logger.error('Failed to create response: %s', str(e))
         return render_template('404.html', error_message='Failed to create response')
