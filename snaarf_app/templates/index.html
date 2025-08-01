@@ -1,16 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ title }}</title>
-  <link href="{{ url_for('static', filename='styles/normalize.css')}}" rel="stylesheet" />
-  <link href="{{ url_for('static', filename='styles/style.css')}}" rel="stylesheet" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <link href="{{ url_for('static', filename='styles/normalize.css') }}" rel="stylesheet"/>
+    <link href="{{ url_for('static', filename='styles/style.css') }}" rel="stylesheet"/>
 </head>
-
 <body>
-  <h1>SnaarfBot: Another Twitch Customization Bot</h1>
-</body>
 
+<div>
+    <h3>SnaarfBot: Yet another Twitch Bot</h3>
+    <h4>What is SnaarfBot?</h4>
+    <p>SnaarfBot is a Twitch bot that can interact with your chat. This site
+        is where you configure the SnaarfBot experience for your channel.</p>
+    <a href={{ twitch_uri }}>Login with Twitch</a>
+</div>
+
+</body>
 </html>
