@@ -8,18 +8,21 @@ This is the source code for the SnaarfBot.com website and the SnaarfBot internal
 The application can be run in two ways:
 
 ### Docker Setup (Recommended)
+If you're using Docker, this is all you need installed on your local machine
 - Docker Engine or Docker Desktop
 - Docker Compose
 
 Note: Docker Desktop includes both Docker and Docker Compose and is recommended for Windows and macOS users. Linux users typically use Docker Engine directly, which requires separate installation of Docker Compose.
 
-### Manual Setup (Not Actively Supported - check dockerfile for most up-to-date dependencies)
-- Debian 12.10 or Windows
-- PostgreSQL 14 (with user/db created)
+### Manual Environment Setup (Not Actively Supported - check dockerfile for most up-to-date dependencies)
+Double-check `/container/snaarf-app.dockerfile` and `/docker-compose.yml` `image` properties for the required versions
+- Debian 12.10 (or compatible distro) or Windows
+- Redis 7 (for session management)
+- PostgreSQL 14 (with user/db created - see below)
 - Python 3.10.12
 - pip 22.0.2
-- pytest 7.4.2
-- Redis (for session management)
+
+Don't run `pip install` just yet. See the `Install Python and App Dependencies` section below.
 
 #### Database
 
@@ -34,7 +37,7 @@ A quick description of the commands necessary to test will eventually be added t
 Here's how to set up your environment to work with this repo once you've cloned it.
 Note: all commands should be run from the project root
 
-### Environment
+### Environment Variables
 A `.env.example` file is provided with default values for local development. Create your `.env` file by copying it:
 ```bash
 cp .env.example .env
@@ -72,36 +75,14 @@ If you have Docker installed, the setup is as easy as running the following comm
 docker-compose up --build
 ```
 This will start three containers:
-- The SnaarfBot application
-- A PostgreSQL 14 database
-- A Redis server for session management
+* app - The SnaarfBot application
+* redis - A Redis server for session management
+* postgres - A PostgreSQL 14 database
+Note: There's a fourth container called `test` used for running tests locally
 
 The application will be available at http://localhost:8000
 
 Note: The application code is mounted as a volume, so any changes you make to the code will be reflected immediately without needing to rebuild the container.
-
-#### Executing commands in a running container
-First, get the CONTAINER_ID from docker:
-```bash
-docker ps
-```
-Then use the exec command to open a shell inside the container:
-```bash
-docker exec -it <CONTAINER_ID> /bin/bash
-```
-
-#### Monitoring Server Logs
-To monitor server logs, use:
-```bash
-docker-compose logs -f
-```
-
-To monitor logs for a specific service:
-```bash
-docker-compose logs -f app      # Application logs
-docker-compose logs -f postgres # Database logs
-docker-compose logs -f redis    # Redis logs
-```
 
 ### Manual Setup (Not Actively Supported)
 The following steps should work, but will at least get you moving in the right direction. Be aware that this method is not actively supported like the Docker method so you may need to make some tweaks. Feel free to suggest corrections or submit a pull request if you run into issues.
@@ -164,13 +145,26 @@ black -l 79 --check snaarf_app/ tests/
 ```
 
 
+#### Monitoring Server Logs
+To monitor server logs, use:
+```bash
+docker-compose logs -f
+```
+
+To monitor logs for a specific service:
+```bash
+docker-compose logs -f app      # Application logs
+docker-compose logs -f redis    # Redis logs
+docker-compose logs -f postgres # Database logs
+```
+
 #### Run tests
-Tests must also pass before you push code changes. A code coverage target will be enforced eventually. For now you can manually open up /tmp/coverage.html in a browser to see the code coverage report.
+Tests must also pass before you push code changes. A code coverage target will be enforced eventually.
 
 ##### Using Docker (Recommended)
 ```bash
 # Run all tests
-docker-compose up test
+docker-compose run test
 
 # Run specific test file
 docker-compose run test pytest tests/test_oauth.py
@@ -182,7 +176,7 @@ docker-compose run test pytest tests/test_oauth.py::test_auth_redirect_success
 docker-compose run test pytest -s tests
 ```
 
-##### Manual Setup
+##### Manual Equivalents
 ```bash
 # Run all tests
 pytest tests/
@@ -195,4 +189,34 @@ pytest tests/test_oauth.py::test_auth_redirect_success
 
 # Run tests with output (for debugging)
 pytest -s tests
+```
+
+#### Add/Remove/Upgrade python packages
+You can update python packages by updating /requirements.txt manually or using pip commands. To apply the changes in your dev environment you must rebuild the 'app' and 'test' docker containers, and you must do so without using docker cache.
+```bash
+# Rebuild containers
+docker-compose build app --no-cache
+docker-compose build test --no-cache
+```
+And you can confirm the new versions were applied using `pip list`
+```bash
+docker-compose run --rm app pip list
+docker-compose run --rm test pip list
+```
+
+#### Running commands in containers
+Sometimes when troubleshooting or testing certain changes you may need to run linux commands inside the containers
+* To run commands against the test service container, replace `app` with `test`
+```bash
+# Bring up container and run one-off command
+docker-compose run --rm app <command>
+
+# Run one-off command inside already running container
+docker-compose exec app <command>
+
+# Bring up container and open a command prompt
+docker-compose run --rm -it app /bin/bash
+
+# Open a command prompt inside an already running container
+docker-compose exec -it app /bin/bash
 ```
