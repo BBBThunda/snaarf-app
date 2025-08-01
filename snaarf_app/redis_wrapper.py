@@ -153,4 +153,4 @@ class RedisWrapper:
         Returns:
             bool: True if the key was deleted
         """
-        return bool(self._redis.delete(key)) 
+        return bool(self._redis.delete(key))
