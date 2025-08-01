@@ -21,8 +21,9 @@ services:
     build:
       context: .
       dockerfile: container/snaarf-app.dockerfile
-    command: pytest tests/
+    command: pytest tests/ -v
     environment:
+      - PYTHONWARNINGS=ignore::DeprecationWarning:werkzeug.*
       - DB_URI=postgresql://snaarf_app:${DB_PASS}@postgres:5432/snaarf_app
       - REDIS_HOST=redis
       - REDIS_PORT=6379
